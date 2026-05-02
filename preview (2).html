@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SMP 서버</title>
+
+<style>
+body{
+    margin:0;
+    font-family:system-ui;
+    background:#050509;
+    color:white;
+}
+
+/* 배경 */
+.bg{
+    position:fixed;
+    inset:0;
+    background:radial-gradient(circle,#1a1a2e,#050509);
+    z-index:-1;
+}
+
+/* 카드 */
+.card{
+    max-width:750px;
+    margin:60px auto;
+    padding:25px;
+    background:rgba(255,255,255,0.05);
+    border:1px solid #00ff8840;
+    border-radius:18px;
+    backdrop-filter:blur(10px);
+    text-align:center;
+}
+
+/* 타이틀 */
+.title{
+    font-size:1.8rem;
+    background:linear-gradient(45deg,#00ff88,#00ccff);
+    -webkit-background-clip:text;
+    color:transparent;
+    font-weight:bold;
+}
+
+/* 상태 */
+.status{
+    margin:15px 0;
+    font-weight:bold;
+}
+
+/* 주소 */
+.addr{
+    padding:10px;
+    border:1px solid #00ff8840;
+    border-radius:12px;
+    margin-bottom:15px;
+}
+
+/* 버튼 */
+button{
+    padding:10px 14px;
+    background:linear-gradient(45deg,#00ff88,#00ccff);
+    border:none;
+    border-radius:10px;
+    color:black;
+    font-weight:bold;
+    cursor:pointer;
+    transition:0.2s;
+}
+
+button:hover{
+    transform:translateY(-2px);
+    box-shadow:0 6px 18px rgba(0,255,136,0.3);
+}
+
+/* 플레이어 */
+.players{
+    margin-top:20px;
+    text-align:left;
+}
+
+.player{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:8px;
+    border-bottom:1px solid #ffffff10;
+}
+
+.player img{
+    width:32px;
+    height:32px;
+    border-radius:6px;
+}
+
+.name{
+    font-weight:bold;
+}
+</style>
+</head>
+
+<body>
+
+<div class="bg"></div>
+
+<div class="card">
+
+    <div class="title">(아마도)25시간 언제든 접속가능한 SMP 서버</div>
+
+    <div class="status" id="status">서버 확인 중...</div>
+
+    <div class="addr">join.wrd.kr:25651</div>
+
+    <button onclick="adminLogin()">관리자 설정</button>
+
+    <div id="players" class="players"></div>
+
+</div>
+
+<script>
+
+// =====================
+// 오프라인 메시지
+// =====================
+const OFFLINE_MESSAGES = [
+    "서버가 재부팅중입니다",
+    "지금 서버가 쉬고 있습니다 관리자에게 문의 해주세요",
+    "점검중입니다 : 파일관련",
+    "점검중입니다 : 보안관련",
+    "점검중입니다 : 인게임 관련",
+    "점검중입니다 : 서버관련"
+];
+
+let currentOfflineMessage = OFFLINE_MESSAGES[0];
+
+// =====================
+// 관리자 기능
+// =====================
+function adminLogin(){
+
+    const pw = prompt("관리자 비밀번호");
+
+    if(pw === "qlstm0104"){
+
+        const pick = prompt(
+            "오프라인 메시지 선택\n\n" +
+            OFFLINE_MESSAGES.map((m,i)=>`${i+1}. ${m}`).join("\n")
+        );
+
+        const idx = parseInt(pick) - 1;
+
+        if(idx >= 0 && idx < OFFLINE_MESSAGES.length){
+            currentOfflineMessage = OFFLINE_MESSAGES[idx];
+            alert("적용됨:\n" + currentOfflineMessage);
+        }
+
+    }else{
+        alert("비밀번호 틀림");
+    }
+}
+
+// =====================
+// 스킨 시스템
+// =====================
+const cacheUUID = {};
+
+async function getUUID(name){
+    if(cacheUUID[name]) return cacheUUID[name];
+
+    try{
+        const res = await fetch(`https://api.mojang.com/users/profiles/minecraft/${name}`);
+        if(!res.ok) return null;
+
+        const data = await res.json();
+        cacheUUID[name] = data.id;
+        return data.id;
+    }catch{
+        return null;
+    }
+}
+
+function skinURL(uuid){
+    return uuid
+        ? `https://crafatar.com/avatars/${uuid}?size=32&overlay=true`
+        : "https://crafatar.com/avatars/steve?size=32&overlay=true";
+}
+
+// =====================
+// 서버 상태 체크
+// =====================
+async function checkServer(){
+
+    const status = document.getElementById("status");
+    const box = document.getElementById("players");
+
+    try{
+        const res = await fetch(
+            "https://api.mcsrvstat.us/2/join.wrd.kr:25651",
+            { cache: "no-store" }
+        );
+
+        const data = await res.json();
+
+        if(data.online === true){
+
+            const p = data.players || {};
+            const list = p.list || [];
+
+            status.innerText = `🟢 온라인 (${p.online ?? 0}/${p.max ?? "?"})`;
+
+            box.innerHTML = "";
+
+            for(const name of list){
+
+                const uuid = await getUUID(name);
+
+                const div = document.createElement("div");
+                div.className = "player";
+
+                div.innerHTML = `
+                    <img src="${skinURL(uuid)}">
+                    <div class="name">${name}</div>
+                `;
+
+                box.appendChild(div);
+            }
+
+        }else{
+            status.innerText = "🔴 " + currentOfflineMessage;
+            box.innerHTML = "";
+        }
+
+    }catch(e){
+        status.innerText = "⚠ " + currentOfflineMessage;
+        box.innerHTML = "";
+    }
+}
+
+checkServer();
+setInterval(checkServer, 30000);
+
+</script>
+
+</body>
+</html>
